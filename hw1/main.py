@@ -2,7 +2,7 @@
 
 """
 Homework Assignment #1: Gregory Presser
-Help Recived From: Husam Almanakly 
+Help Recived From: Husam Almanakly
 """
 import os
 import logging
@@ -18,6 +18,9 @@ from tqdm import trange
 from dataclasses import dataclass, field, InitVar
 
 script_path = os.path.dirname(os.path.realpath(__file__))
+
+LOWER_VAL = 0
+UPPER_VAL = 1
 
 
 @dataclass
@@ -40,10 +43,11 @@ class Data:
 
     def __post_init__(self, rng):
         self.index = np.arange(self.num_samples)
-        self.x = rng.uniform(0.1, 0.9,
-                             size=(self.num_samples, self.num_features))
-        clean_y = np.sin(2*np.pi * self.x) 
-        self.y = rng.normal(loc=clean_y, scale=self.sigma)
+        self.x = rng.uniform(LOWER_VAL, UPPER_VAL,
+                             size=(self.num_samples, 1))
+        clean_y = np.sin(2*np.pi * self.x)
+        self.y = clean_y + \
+            rng.normal(loc=0, scale=.1, size=(self.num_samples, 1))
 
     def get_batch(self, rng, batch_size):
         """
@@ -70,15 +74,15 @@ matplotlib.style.use("classic")
 matplotlib.rc("font", **font)
 
 FLAGS = flags.FLAGS
-flags.DEFINE_integer("num_features", 1, "Number of features in record")
+flags.DEFINE_integer("num_features", 4, "Number of features in record")
 flags.DEFINE_integer("num_samples", 50, "Number of samples in dataset")
 flags.DEFINE_integer("batch_size", 16, "Number of samples in batch")
 flags.DEFINE_integer("num_iters", 300, "Number of SGD iterations")
-flags.DEFINE_float("learning_rate", 0.1, "Learning rate / step size for SGD")
+flags.DEFINE_float("learning_rate", 0.01, "Learning rate / step size for SGD")
 flags.DEFINE_integer("random_seed", 31415, "Random seed")
-flags.DEFINE_float("sigma_noise", 0.5,
+flags.DEFINE_float("sigma_noise", 0.1,
                    "Standard deviation of noise random variable")
-flags.DEFINE_bool("debug", False, "Set logging level to debug")
+flags.DEFINE_bool("debug", True, "Set logging level to debug")
 
 
 class Model(tf.Module):
@@ -87,14 +91,18 @@ class Model(tf.Module):
         A plain linear regression model with a bias term
         """
         self.num_features = num_features
-        self.w = tf.Variable(rng.normal(shape=[self.num_features, 1]))
-        self.mew = tf.Variable(tf.cast(tf.linspace(.1,.9, self.num_features),tf.float32))
-        self.sigma = tf.Variable(rng.normal(shape=[self.num_features, 1]))
-        self.b = tf.Variable(tf.ones(shape=[self.num_features, 1])) * .4
+        self.b = tf.Variable(tf.zeros(shape=[1, 1]), name="bias")
+        self.w = tf.Variable(rng.normal(shape=[self.num_features, 1]),
+                             name="weights")
+        self.mew = tf.Variable(tf.cast(
+            tf.linspace(LOWER_VAL, UPPER_VAL, self.num_features), tf.float32), name="mew")
+        self.sigma = tf.Variable(tf.ones(shape=[self.num_features, 1]), ) * 0.4
 
     def __call__(self, x):
-        phi = tf.math.exp((-(x-self.mew)**2) / (self.sigma**2))
-        return tf.squeeze((self.w * phi) + self.b)
+        gaussians = tf.transpose(self.w) *  \
+                    tf.math.exp(-((x - tf.transpose(self.mew))**2
+                                / (tf.transpose(self.sigma) ** 2)))
+        return tf.squeeze(tf.reduce_sum(gaussians, 1) + self.b)
 
     @property
     def model(self):
@@ -158,10 +166,6 @@ def main(a):
     print("w,    w_hat")
     compare_linear_models(data.model, model.model)
 
-    if FLAGS.num_features > 1:
-        # Only continue to plotting if x is a scalar
-        exit(0)
-
     fig, ax = plt.subplots(1, 2, figsize=(10, 3), dpi=200)
 
     ax[0].set_title("Sinewave Regression")
@@ -169,24 +173,24 @@ def main(a):
     ylab = ax[0].set_ylabel("y", labelpad=10)
     ylab.set_rotation(0)
 
-    xs = np.linspace(.1,.9, 1000)
+    xs = np.linspace(np.amin(model.mew) * 1.5, np.amax(model.mew)*1.5, 1000)
     xs = xs[: np.newaxis]
-    y_hat = model(xs)
-    ax[0].plot(xs,np.squeeze(y_hat), "--", color="red") 
-    ax[0].plot(np.squeeze(data.x), data.y,"o", color="blue")
-    
+    y_hat = model(xs.reshape(1000, 1))
+    ax[0].plot(xs, np.squeeze(y_hat), "--", color="red")
+    ax[0].plot(np.squeeze(data.x), data.y, "o", color="blue")
 
     real_y = np.sin(2*np.pi*xs)
-    ax[0].plot(xs,real_y,color="green")
-
+    ax[0].plot(xs, real_y, color="green")
 
     ax[1].set_title("Basis Functions")
     ax[1].set_xlabel("x")
-    ylab = ax[1].set_ylabel("y",labelpad=10)
+    ylab = ax[1].set_ylabel("y", labelpad=10)
     ylab.set_rotation(0)
 
-    phi = np.transpose(np.exp((-(xs.T - model.mew) ** 2) / (model.sigma) ** 2  ))
-    ax[1].plot(xs,phi)
+    phi = np.zeros((1000, model.num_features))
+    for i in range(model.num_features):
+        phi[:, i] = np.exp(-(xs.T - model.mew[i]) ** 2 / (model.sigma[i] ** 2))
+    ax[1].plot(xs, phi)
 
     plt.tight_layout()
     plt.savefig(f"{script_path}/fit.pdf")
