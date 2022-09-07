@@ -95,7 +95,8 @@ class Model(tf.Module):
         self.w = tf.Variable(rng.normal(shape=[self.num_features, 1]),
                              name="weights")
         self.mew = tf.Variable(tf.cast(
-            tf.linspace(LOWER_VAL, UPPER_VAL, self.num_features), tf.float32), name="mew")
+            tf.linspace(LOWER_VAL, UPPER_VAL, self.num_features), tf.float32),
+            name="mew")
         self.sigma = tf.Variable(tf.ones(shape=[self.num_features, 1]), ) * 0.4
 
     def __call__(self, x):
