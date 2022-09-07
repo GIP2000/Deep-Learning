@@ -97,7 +97,7 @@ class Model(tf.Module):
         self.mew = tf.Variable(tf.cast(
             tf.linspace(LOWER_VAL, UPPER_VAL, self.num_features), tf.float32),
             name="mew")
-        self.sigma = tf.Variable(tf.ones(shape=[self.num_features, 1]), ) * 0.4
+        self.sigma = tf.Variable(tf.ones(shape=[self.num_features, 1]), ) * 0.3
 
     def __call__(self, x):
         gaussians = tf.transpose(self.w) *  \
