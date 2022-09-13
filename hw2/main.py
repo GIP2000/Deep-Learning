@@ -10,12 +10,9 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Input
-from tensorflow.keras.layers import Dense
-from tensorflow.keras.layers import Activation
 from dataclasses import dataclass, field
 from absl import flags,app
+from tqdm import trange
 
 script_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -45,8 +42,6 @@ class Data:
         self.x = self.x[::,p].transpose()
         self.y = self.y[p].transpose()
 
-
-
     def split_data(self, split_point:int):
         return (
                 tf.convert_to_tensor(self.x[0:split_point,::],dtype=tf.float32),
@@ -55,46 +50,94 @@ class Data:
                 tf.convert_to_tensor(self.y[split_point:].reshape((-1,1)),dtype= tf.float32)
                )
 
+class Dense(tf.Module):
+    def __init__(self, neurons: int, is_output:bool = False, name: str = None):
+        super().__init__(name=name)
+        self.neurons = neurons
+        self.is_output= is_output
+        self.__is_built = False
+
+    def build(self,rng,inputs:int, points:int):
+        self.w = tf.Variable(rng.normal(shape=[inputs,self.neurons]),name = "w")
+        self.b = tf.Variable(rng.normal(shape=[points,self.neurons]),name = "b")
+        self.__is_built = True
+
+    def __call__(self,x):
+        if not self.__is_built:
+            self.build()
+        v = x @ self.w + self.b
+        return tf.nn.sigmoid(v) if self.is_output else tf.nn.relu(v)
+
+class Model(tf.Module):
+    def __init__(self,rng,inputs: int, points: int, nodes:list[Dense], name = None):
+        super().__init__(name=name)
+        self.layers = []
+        with self.name_scope:
+            for node in nodes:
+                node.build(rng,inputs,points)
+                self.layers.append(node)
+                inputs = node.neurons
+    
+    def __call__(self,x):
+        value = x
+        for node in self.layers:
+            value = node(value)
+        return value
+
+def loss(y, y_hat): 
+    return -y * tf.math.log(y_hat) - (1-y) * tf.math.log(1-y_hat)
+
 
 FLAGS = flags.FLAGS
 flags.DEFINE_integer("num_points",100, "Number of points in each spiral")
 flags.DEFINE_integer("batch_size", 10, "Number of samples in batch")
+flags.DEFINE_integer("random_seed", 31415, "Random seed")
+flags.DEFINE_float("learning_rate", 0.01, "Learning rate")
+flags.DEFINE_integer("num_iters", 300, "Number of SGD iterations")
 
 
-def convert_to_color(val: int): 
-    return "blue" if val == 0 else "red"
+def convert_to_color(val: float): 
+    return "blue" if val <= .5 else "red"
 
 def main(a):
     d = Data(FLAGS.num_points)
+    seed_sequence = np.random.SeedSequence(FLAGS.random_seed)
+    np_seed, tf_seed = seed_sequence.spawn(2)
+    tf_rng = tf.random.Generator.from_seed(tf_seed.entropy)
+
 
     x_train,y_train,x_test,y_test= d.split_data(int(FLAGS.num_points * 2 * .8))
 
-    model = Sequential([
-        Input(shape=(2,1)),
-        Dense(4,activation='relu'),
-        Dense(7,activation='relu'),
-        Dense(4,activation='relu'),
-        Dense(2,activation='relu'),
-        Dense(1,activation='sigmoid'),
+    model = Model(tf_rng,2,int(FLAGS.num_points * 2 * .8),[
+        Dense(32),
+        Dense(32), 
+        Dense(32), 
+        Dense(32), 
+        Dense(1,True), 
     ])
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=.01)
 
-    model.compile(optimizer=optimizer,loss="binary_crossentropy",metrics=['accuracy'])
+    bar = trange(FLAGS.num_iters)
+    for i in bar:
+        with tf.GradientTape() as tape:
+            y_hat = model(x_train)
+            ls = loss(y_train,y_hat)
 
-    model.fit(x_train,y_train, epochs=2000,batch_size=FLAGS.batch_size, validation_split=.2)
+        grads = tape.gradient(ls, model.trainable_variables)
+        optimizer.apply_gradients(zip(grads, model.trainable_variables))
 
-    results = model.evaluate(x_test,y_test,verbose = 0)
-    print("results",results)
+        # bar.set_description(f"Loss @ {i} => {np.average(ls).reduce:0.6f}")
+        bar.refresh()
 
-
+    print("hi", y_hat.shape)
     true_colors = [convert_to_color(y) for y in d.y]
-    predictions = [convert_to_color(np.argmin(model.predict(points.reshape(2,1)).flatten())) for points in d.x]
-    fig, ax = plt.subplots(1, 2, figsize=(10, 3), dpi=200)
-    ax[0].set_title("true")
-    ax[0].scatter(d.x[::,0],d.x[::,1],  color=true_colors)
-    ax[1].set_title("predictions")
-    ax[1].scatter(d.x[::,0],d.x[::,1],  color=predictions)
+    # predictions = [convert_to_color(model.predict(points.reshape(2,1)).flatten()[0]) for points in d.x]
+    # fig, ax = plt.subplots(1, 2, figsize=(10, 3), dpi=200)
+    # ax[0].set_title("true")
+    # ax[0].scatter(d.x[::,0],d.x[::,1],  color=true_colors)
+    # ax[1].set_title("predictions")
+    # ax[1].scatter(d.x[::,0],d.x[::,1],  color=predictions)
 
     plt.tight_layout()
     plt.savefig(f"{script_path}/fit.pdf")
