@@ -117,13 +117,17 @@ def main(_):
 
     d = Data(FLAGS.num_points,np_rng)
 
-    model = Model(tf_rng,2,FLAGS.batch_size,[
-        Dense(32),
-        Dense(32), 
-        Dense(32), 
-        Dense(32), 
-        Dense(1,True), 
-    ])
+    model = Model(tf_rng,
+            input=2,
+            points=FLAGS.batch_size,
+            nodes=[
+                Dense(32),
+                Dense(32), 
+                Dense(32), 
+                Dense(32), 
+                Dense(1,True), 
+            ]
+        )
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=.01)
 
