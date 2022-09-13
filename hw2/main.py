@@ -67,9 +67,9 @@ class Dense(tf.Module):
         self.is_output = is_output
         self.__is_built = False
 
-    def build(self,rng, inputs: int):
-        self.w = tf.Variable(rng.normal(shape=[inputs, self.neurons]), name = "w")
-        self.b = tf.Variable(tf.zeros(shape=[1, self.neurons]), name = "b")
+    def build(self,rng, inputs: int, index: int = 0):
+        self.w = tf.Variable(rng.normal(shape=[inputs, self.neurons]), name = "w" + str(index))
+        self.b = tf.Variable(tf.zeros(shape=[1, self.neurons]), name = "b" + str(index))
         self.__is_built = True
 
     def __call__(self, x):
@@ -84,11 +84,12 @@ class Model(tf.Module):
         super().__init__(name=name)
         self.layers = []
         with self.name_scope:
-            for node in nodes:
-                node.build(rng, inputs)
+            for (i, node) in enumerate(nodes):
+                node.build(rng, inputs, i)
                 self.layers.append(node)
                 inputs = node.neurons
 
+    @tf.Module.with_name_scope
     def __call__(self, x):
         value = x
         for node in self.layers:
@@ -137,11 +138,18 @@ def main(_):
     for i in bar:
         with tf.GradientTape() as tape:
             x_train, y_train = d.get_batch(np_rng, FLAGS.batch_size)
+            y_train = y_train.reshape(16, 1)
+            print("y_train", y_train)
             y_hat = model(x_train)
+            print("y_hat", y_hat)
             loss = tf.keras.losses.BinaryCrossentropy()
-            ls = loss(y_train.reshape(16, 1), y_hat)
+            ls = loss(y_train, y_hat)
+
+        print("ls", ls)
 
         grads = tape.gradient(ls, model.trainable_variables)
+        print("grads", grads)
+        exit(0)
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
 
         bar.set_description(f"Loss @ {i} => {ls.numpy():0.6f}")
