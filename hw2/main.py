@@ -47,17 +47,9 @@ class Data:
         """
         Select random subset of examples for training batch
         """
-        choices = rng.choice(self.index, size=batch_size)
+        choices = rng.choice(self.index*2, size=batch_size)
 
         return self.x[choices], self.y[choices]
-
-    def split_data(self, split_point: int):
-        return (
-                tf.convert_to_tensor(self.x[0:split_point,::],dtype=tf.float32),
-                tf.convert_to_tensor(self.y[0:split_point].reshape((-1,1)),dtype=tf.float32),
-                tf.convert_to_tensor(self.x[split_point:,::],dtype=tf.float32),
-                tf.convert_to_tensor(self.y[split_point:].reshape((-1,1)),dtype= tf.float32)
-               )
 
 
 class Dense(tf.Module):
@@ -76,7 +68,7 @@ class Dense(tf.Module):
         if not self.__is_built:
             raise Exception("Model was never build")
         v = x @ self.w + self.b
-        return tf.nn.sigmoid(v) if self.is_output else tf.nn.relu(v)
+        return tf.nn.sigmoid(v) if self.is_output else tf.nn.tanh(v)
 
 
 class Model(tf.Module):
@@ -98,15 +90,16 @@ class Model(tf.Module):
 
 
 def loss(y, y_hat):
-    return -y * tf.math.log(y_hat) - (1-y) * tf.math.log(1-y_hat)
+    # print("a_loss",-y * tf.math.log(y_hat) - (1-y) * tf.math.log(1-y_hat))
+    return tf.reduce_mean(-y * tf.math.log(y_hat) - (1-y) * tf.math.log(1-y_hat))
 
 
 FLAGS = flags.FLAGS
 flags.DEFINE_integer("num_points", 100, "Number of points in each spiral")
 flags.DEFINE_integer("batch_size", 16, "Number of samples in batch")
 flags.DEFINE_integer("random_seed", 31415, "Random seed")
-flags.DEFINE_float("learning_rate", 0.03, "Learning rate")
-flags.DEFINE_integer("num_iters", 300, "Number of iterations")
+flags.DEFINE_float("learning_rate", 0.01, "Learning rate")
+flags.DEFINE_integer("num_iters", 10000, "Number of iterations")
 
 
 def convert_to_color(val: float):
@@ -125,15 +118,14 @@ def main(_):
                   inputs=2,
                   points=FLAGS.batch_size,
                   nodes=[
-                    Dense(5),
-                    Dense(5),
-                    Dense(5),
-                    Dense(5),
+                    Dense(128),
+                    Dense(128),
+                    Dense(128),
                     Dense(1, True)
                   ])
 
-    # optimizer = tf.optimizers.SGD(learning_rate=FLAGS.learning_rate)
-    optimizer = tf.keras.optimizers.Adam(learning_rate=FLAGS.learning_rate)
+    optimizer = tf.optimizers.SGD(learning_rate=FLAGS.learning_rate)
+    # optimizer = tf.keras.optimizers.Adam(learning_rate=FLAGS.learning_rate)
 
     bar = trange(FLAGS.num_iters)
     for i in bar:
@@ -141,7 +133,6 @@ def main(_):
             x_train, y_train = d.get_batch(np_rng, FLAGS.batch_size)
             y_train = y_train.reshape(FLAGS.batch_size, 1)
             y_hat = model(x_train)
-            loss = tf.keras.losses.BinaryCrossentropy()
             ls = loss(y_train, y_hat)
 
         grads = tape.gradient(ls, model.trainable_variables)
