@@ -106,7 +106,7 @@ flags.DEFINE_integer("num_points", 100, "Number of points in each spiral")
 flags.DEFINE_integer("batch_size", 16, "Number of samples in batch")
 flags.DEFINE_integer("random_seed", 31415, "Random seed")
 flags.DEFINE_float("learning_rate", 0.03, "Learning rate")
-flags.DEFINE_integer("num_iters", 300, "Number of SGD iterations")
+flags.DEFINE_integer("num_iters", 300, "Number of iterations")
 
 
 def convert_to_color(val: float):
@@ -125,9 +125,10 @@ def main(_):
                   inputs=2,
                   points=FLAGS.batch_size,
                   nodes=[
-                    Dense(32),
-                    Dense(32),
-                    Dense(32),
+                    Dense(5),
+                    Dense(5),
+                    Dense(5),
+                    Dense(5),
                     Dense(1, True)
                   ])
 
@@ -138,18 +139,12 @@ def main(_):
     for i in bar:
         with tf.GradientTape() as tape:
             x_train, y_train = d.get_batch(np_rng, FLAGS.batch_size)
-            y_train = y_train.reshape(16, 1)
-            print("y_train", y_train)
+            y_train = y_train.reshape(FLAGS.batch_size, 1)
             y_hat = model(x_train)
-            print("y_hat", y_hat)
             loss = tf.keras.losses.BinaryCrossentropy()
             ls = loss(y_train, y_hat)
 
-        print("ls", ls)
-
         grads = tape.gradient(ls, model.trainable_variables)
-        print("grads", grads)
-        exit(0)
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
 
         bar.set_description(f"Loss @ {i} => {ls.numpy():0.6f}")
