@@ -10,7 +10,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, InitVar
 from absl import flags,app
 from tqdm import trange
 
@@ -22,8 +22,10 @@ class Data:
     num_samples: int
     x: np.ndarray = field(init=False)
     y: np.ndarray = field(init=False)
+    rng: InitVar[np.random.Generator]
 
-    def __post_init__(self): 
+
+    def __post_init__(self,rng): 
         """
         Data Generation based off of https://conx.readthedocs.io/en/latest/Two-Spirals.html
         Then Vectorized
@@ -38,9 +40,18 @@ class Data:
         self.x = np.concatenate((spiral1,spiral2),axis=1)
         self.y = np.concatenate((np.zeros(self.num_samples), np.ones(self.num_samples)),axis=None)
 
-        p = np.random.permutation(len(self.y))
+        p = rng.permutation(len(self.y))
         self.x = self.x[::,p].transpose()
         self.y = self.y[p].transpose()
+
+    def get_batch(self, rng, batch_size):
+        """
+        Select random subset of examples for training batch
+        """
+        choices = rng.choice(self.index, size=batch_size)
+
+        return self.x[choices], self.y[choices]
+
 
     def split_data(self, split_point:int):
         return (
@@ -90,25 +101,23 @@ def loss(y, y_hat):
 
 FLAGS = flags.FLAGS
 flags.DEFINE_integer("num_points",100, "Number of points in each spiral")
-flags.DEFINE_integer("batch_size", 10, "Number of samples in batch")
+flags.DEFINE_integer("batch_size", 16, "Number of samples in batch")
 flags.DEFINE_integer("random_seed", 31415, "Random seed")
 flags.DEFINE_float("learning_rate", 0.01, "Learning rate")
 flags.DEFINE_integer("num_iters", 300, "Number of SGD iterations")
 
-
 def convert_to_color(val: float): 
     return "blue" if val <= .5 else "red"
 
-def main(a):
-    d = Data(FLAGS.num_points)
+def main(_):
     seed_sequence = np.random.SeedSequence(FLAGS.random_seed)
     np_seed, tf_seed = seed_sequence.spawn(2)
+    np_rng = np.random.default_rng(np_seed)
     tf_rng = tf.random.Generator.from_seed(tf_seed.entropy)
 
+    d = Data(FLAGS.num_points,np_rng)
 
-    x_train,y_train,x_test,y_test= d.split_data(int(FLAGS.num_points * 2 * .8))
-
-    model = Model(tf_rng,2,int(FLAGS.num_points * 2 * .8),[
+    model = Model(tf_rng,2,FLAGS.batch_size,[
         Dense(32),
         Dense(32), 
         Dense(32), 
@@ -119,19 +128,23 @@ def main(a):
     optimizer = tf.keras.optimizers.Adam(learning_rate=.01)
 
     bar = trange(FLAGS.num_iters)
-    for i in bar:
+    for _ in bar:
         with tf.GradientTape() as tape:
+            x_train,y_train = d.get_batch(np_rng,FLAGS.batch_size)
+            # print(y_train.shape)
             y_hat = model(x_train)
-            ls = loss(y_train,y_hat)
+            # print(y_hat.shape, y_train.shape)
+            ls = loss(y_train.reshape(16,1),y_hat)
+            # print("loss: ", ls.shape, ls)
+            # TODO fix only getting nans 
 
         grads = tape.gradient(ls, model.trainable_variables)
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
 
-        # bar.set_description(f"Loss @ {i} => {np.average(ls).reduce:0.6f}")
+        # bar.set_description(f"Loss @ {i} => {np.average(ls).reduce:0.6f}") # TODO fix this 
         bar.refresh()
 
-    print("hi", y_hat.shape)
-    true_colors = [convert_to_color(y) for y in d.y]
+    # true_colors = [convert_to_color(y) for y in d.y]
     # predictions = [convert_to_color(model.predict(points.reshape(2,1)).flatten()[0]) for points in d.x]
     # fig, ax = plt.subplots(1, 2, figsize=(10, 3), dpi=200)
     # ax[0].set_title("true")
