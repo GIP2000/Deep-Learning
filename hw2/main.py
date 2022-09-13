@@ -90,7 +90,6 @@ class Model(tf.Module):
 
 
 def loss(y, y_hat):
-    # print("a_loss",-y * tf.math.log(y_hat) - (1-y) * tf.math.log(1-y_hat))
     return tf.reduce_mean(-y * tf.math.log(y_hat) - (1-y) * tf.math.log(1-y_hat))
 
 
@@ -118,9 +117,9 @@ def main(_):
                   inputs=2,
                   points=FLAGS.batch_size,
                   nodes=[
-                    Dense(128),
-                    Dense(128),
-                    Dense(128),
+                    Dense(512),
+                    Dense(512),
+                    Dense(512),
                     Dense(1, True)
                   ])
 
