@@ -40,7 +40,7 @@ class Data:
         self.y = np.concatenate((np.zeros(self.num_samples), np.ones(self.num_samples)),axis=None)
 
         p = rng.permutation(len(self.y))
-        self.x = self.x[::,p].transpose()
+        self.x = self.x[::, p].transpose()
         self.y = self.y[p].transpose()
 
     def get_batch(self, rng, batch_size):
@@ -51,8 +51,7 @@ class Data:
 
         return self.x[choices], self.y[choices]
 
-
-    def split_data(self, split_point:int):
+    def split_data(self, split_point: int):
         return (
                 tf.convert_to_tensor(self.x[0:split_point,::],dtype=tf.float32),
                 tf.convert_to_tensor(self.y[0:split_point].reshape((-1,1)),dtype=tf.float32),
@@ -60,21 +59,22 @@ class Data:
                 tf.convert_to_tensor(self.y[split_point:].reshape((-1,1)),dtype= tf.float32)
                )
 
+
 class Dense(tf.Module):
-    def __init__(self, neurons: int, is_output:bool = False, name: str = None):
+    def __init__(self, neurons: int, is_output: bool = False, name: str = None):
         super().__init__(name=name)
         self.neurons = neurons
         self.is_output = is_output
         self.__is_built = False
 
-    def build(self,rng,inputs:int, points:int):
-        self.w = tf.Variable(rng.normal(shape=[inputs,self.neurons]),name = "w")
-        self.b = tf.Variable(rng.normal(shape=[1,self.neurons]),name = "b")
+    def build(self,rng, inputs: int):
+        self.w = tf.Variable(rng.normal(shape=[inputs, self.neurons]), name = "w")
+        self.b = tf.Variable(tf.zeros(shape=[1, self.neurons]), name = "b")
         self.__is_built = True
 
-    def __call__(self,x):
+    def __call__(self, x):
         if not self.__is_built:
-            self.build()
+            raise Exception("Model was never build")
         v = x @ self.w + self.b
         return tf.nn.sigmoid(v) if self.is_output else tf.nn.relu(v)
 
@@ -85,7 +85,7 @@ class Model(tf.Module):
         self.layers = []
         with self.name_scope:
             for node in nodes:
-                node.build(rng, inputs, points)
+                node.build(rng, inputs)
                 self.layers.append(node)
                 inputs = node.neurons
 
@@ -104,7 +104,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_integer("num_points", 100, "Number of points in each spiral")
 flags.DEFINE_integer("batch_size", 16, "Number of samples in batch")
 flags.DEFINE_integer("random_seed", 31415, "Random seed")
-flags.DEFINE_float("learning_rate", 0.01, "Learning rate")
+flags.DEFINE_float("learning_rate", 0.03, "Learning rate")
 flags.DEFINE_integer("num_iters", 300, "Number of SGD iterations")
 
 
@@ -127,11 +127,11 @@ def main(_):
                     Dense(32),
                     Dense(32),
                     Dense(32),
-                    Dense(32),
                     Dense(1, True)
                   ])
 
-    optimizer = tf.keras.optimizers.Adam(learning_rate=.01)
+    # optimizer = tf.optimizers.SGD(learning_rate=FLAGS.learning_rate)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=FLAGS.learning_rate)
 
     bar = trange(FLAGS.num_iters)
     for i in bar:
