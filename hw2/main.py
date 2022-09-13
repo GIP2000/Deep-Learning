@@ -2,7 +2,7 @@
 #!/bin/env python3.8
 
 """
-Homework Assignment #1: Gregory Presser
+Homework Assignment #2: Gregory Presser
 """
 import os
 import logging
@@ -47,7 +47,7 @@ class Data:
 
 
 
-    def split_data(self, split_point):
+    def split_data(self, split_point:int):
         return (
                 tf.convert_to_tensor(self.x[0:split_point,::],dtype=tf.float32),
                 tf.convert_to_tensor(self.y[0:split_point].reshape((-1,1)),dtype=tf.float32),
@@ -75,14 +75,14 @@ def main(a):
         Dense(7,activation='relu'),
         Dense(4,activation='relu'),
         Dense(2,activation='relu'),
-        Dense(1,activation='relu'),
+        Dense(1,activation='sigmoid'),
     ])
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=.01)
 
     model.compile(optimizer=optimizer,loss="binary_crossentropy",metrics=['accuracy'])
 
-    model.fit(x_train,y_train, epochs=3000,batch_size=FLAGS.batch_size, validation_split=.2)
+    model.fit(x_train,y_train, epochs=2000,batch_size=FLAGS.batch_size, validation_split=.2)
 
     results = model.evaluate(x_test,y_test,verbose = 0)
     print("results",results)
@@ -90,7 +90,6 @@ def main(a):
 
     true_colors = [convert_to_color(y) for y in d.y]
     predictions = [convert_to_color(np.argmin(model.predict(points.reshape(2,1)).flatten())) for points in d.x]
-    # plt.scatter(d.x[::,0],d.x[::,1],  color=predictions)
     fig, ax = plt.subplots(1, 2, figsize=(10, 3), dpi=200)
     ax[0].set_title("true")
     ax[0].scatter(d.x[::,0],d.x[::,1],  color=true_colors)
