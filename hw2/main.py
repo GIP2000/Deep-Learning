@@ -21,16 +21,15 @@ script_path = os.path.dirname(os.path.realpath(__file__))
 class Data:
     num_samples: int
     sig: float
-    range: (float, float)
+    range: tuple[float, float]
     x: np.ndarray = field(init=False)
     y: np.ndarray = field(init=False)
     rng: InitVar[np.random.Generator]
 
     def __post_init__(self, rng):
         """
-        Data Generation based off
-        of https://conx.readthedocs.io/en/latest/Two-Spirals.html
-        Then Vectorized
+        Data generation with help from 
+        Jacob Khalili 
         """
         self.index = np.arange(self.num_samples * 2)
 
@@ -53,18 +52,7 @@ class Data:
         data_2 = [x_2, y_2]
         self.x = np.concatenate([data_1, data_2], axis=1).T
         self.y = np.concatenate(([0] * self.num_samples, [1] * self.num_samples))
-        # phi = self.index / 16 * np.pi
-        # r = 6.5 * ((104 - self.index)/104)
-        # spiral1 = np.array([r * np.cos(phi) / 13 + .5,r * np.sin(phi) / 13 + .5])
-        # spiral2 = np.array([-r * np.cos(phi) / 13 + 0.5,-r * np.sin(phi) / 13 + 0.5])
-        #
-        # self.x = np.concatenate((spiral1,spiral2),axis=1)
-        # self.y = np.concatenate((np.zeros(self.num_samples), np.ones(self.num_samples)),axis=None)
-        #
-        # p = rng.permutation(len(self.y))
-        # self.x = self.x[::, p].transpose()
-        # self.y = self.y[p].transpose()
-        #
+
     def get_batch(self, rng, batch_size):
         """
         Select random subset of examples for training batch
@@ -117,7 +105,7 @@ def loss(y, y_hat):
 
 
 FLAGS = flags.FLAGS
-flags.DEFINE_integer("num_points", 2000, "Number of points in each spiral")
+flags.DEFINE_integer("num_points", 3000, "Number of points in each spiral")
 flags.DEFINE_integer("batch_size", 128, "Number of samples in batch")
 flags.DEFINE_integer("random_seed", 31415, "Random seed")
 flags.DEFINE_float("learning_rate", 0.001, "Learning rate")
@@ -146,7 +134,6 @@ def main(_):
                     Dense(1, True)
                   ])
 
-    # optimizer = tf.optimizers.SGD(learning_rate=FLAGS.learning_rate)
     optimizer = tf.keras.optimizers.Adam(learning_rate=FLAGS.learning_rate, beta_1 = .9, beta_2=.999, epsilon=1e-07, name="Adam")
 
     bar = trange(FLAGS.num_iters)
@@ -163,13 +150,18 @@ def main(_):
         bar.set_description(f"Loss @ {i} => {ls.numpy():0.6f}")
         bar.refresh()
 
-    true_colors = [convert_to_color(y) for y in d.y]
-    predictions = [convert_to_color(color) for color in model(d.x).numpy()]
-    fig, ax = plt.subplots(1, 2, figsize=(10, 3), dpi=200)
-    ax[0].set_title("true")
-    ax[0].scatter(d.x[::, 0], d.x[::, 1], color=true_colors)
-    ax[1].set_title("predictions")
-    ax[1].scatter(d.x[::, 0], d.x[::, 1], color=predictions)
+    # true_colors = [convert_to_color(y) for y in d.y]
+    predictions = [convert_to_color(y) for y in model(d.x).numpy()]
+    plt.scatter(d.x[::, 0], d.x[::, 1], color=predictions, zorder=10)
+
+    x = np.linspace(-17,17,FLAGS.num_points)
+    y = x 
+    l = len(x)
+    [X,Y] = np.meshgrid(x,y)
+    cords = np.vstack([X.ravel(), Y.ravel()]).T
+    Z = model(cords).numpy().reshape(l,l)
+    plt.contourf(X,Y,Z,[0,0.5,1], colors=["lightskyblue","lightcoral"])
+    plt.title("Plot of points and Contor map")
 
     plt.tight_layout()
     plt.savefig(f"{script_path}/fit.pdf")
