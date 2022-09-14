@@ -20,6 +20,8 @@ script_path = os.path.dirname(os.path.realpath(__file__))
 @dataclass
 class Data:
     num_samples: int
+    sig: float
+    range: (float, float)
     x: np.ndarray = field(init=False)
     y: np.ndarray = field(init=False)
     rng: InitVar[np.random.Generator]
@@ -30,24 +32,44 @@ class Data:
         of https://conx.readthedocs.io/en/latest/Two-Spirals.html
         Then Vectorized
         """
-        self.index = np.arange(self.num_samples)
-        phi = self.index / 16 * np.pi
-        r = 6.5 * ((104 - self.index)/104)
-        spiral1 = np.array([r * np.cos(phi) / 13 + .5,r * np.sin(phi) / 13 + .5])
-        spiral2 = np.array([-r * np.cos(phi) / 13 + 0.5,-r * np.sin(phi) / 13 + 0.5])
+        self.index = np.arange(self.num_samples * 2)
 
-        self.x = np.concatenate((spiral1,spiral2),axis=1)
-        self.y = np.concatenate((np.zeros(self.num_samples), np.ones(self.num_samples)),axis=None)
+        r_1 = rng.uniform(self.range[0], self.range[1], size=self.num_samples)
+        r_2 = rng.uniform(self.range[0], self.range[1], size=self.num_samples)
 
-        p = rng.permutation(len(self.y))
-        self.x = self.x[::, p].transpose()
-        self.y = self.y[p].transpose()
+        x_1 = r_1 * tf.math.cos(r_1)
+        y_1 = r_1 * tf.math.sin(r_1)
 
+        x_2 = -r_2 * tf.math.cos(r_2)
+        y_2 = -r_2 * tf.math.sin(r_2)
+
+        x_1 += rng.normal(0, self.sig, (self.num_samples))
+        y_1 += rng.normal(0, self.sig, (self.num_samples))
+
+        x_2 += rng.normal(0, self.sig, (self.num_samples))
+        y_2 += rng.normal(0, self.sig, (self.num_samples))
+
+        data_1 = [x_1, y_1]
+        data_2 = [x_2, y_2]
+        self.x = np.concatenate([data_1, data_2], axis=1).T
+        self.y = np.concatenate(([0] * self.num_samples, [1] * self.num_samples))
+        # phi = self.index / 16 * np.pi
+        # r = 6.5 * ((104 - self.index)/104)
+        # spiral1 = np.array([r * np.cos(phi) / 13 + .5,r * np.sin(phi) / 13 + .5])
+        # spiral2 = np.array([-r * np.cos(phi) / 13 + 0.5,-r * np.sin(phi) / 13 + 0.5])
+        #
+        # self.x = np.concatenate((spiral1,spiral2),axis=1)
+        # self.y = np.concatenate((np.zeros(self.num_samples), np.ones(self.num_samples)),axis=None)
+        #
+        # p = rng.permutation(len(self.y))
+        # self.x = self.x[::, p].transpose()
+        # self.y = self.y[p].transpose()
+        #
     def get_batch(self, rng, batch_size):
         """
         Select random subset of examples for training batch
         """
-        choices = rng.choice(self.index*2, size=batch_size)
+        choices = rng.choice(self.num_samples*2, size=batch_size)
 
         return self.x[choices], self.y[choices]
 
@@ -60,7 +82,7 @@ class Dense(tf.Module):
         self.__is_built = False
 
     def build(self,rng, inputs: int, index: int = 0):
-        self.w = tf.Variable(rng.normal(shape=[inputs, self.neurons]), name = "w" + str(index))
+        self.w = tf.Variable(rng.normal(shape=[inputs, self.neurons]) * .01, name = "w" + str(index))
         self.b = tf.Variable(tf.zeros(shape=[1, self.neurons]), name = "b" + str(index))
         self.__is_built = True
 
@@ -68,7 +90,7 @@ class Dense(tf.Module):
         if not self.__is_built:
             raise Exception("Model was never build")
         v = x @ self.w + self.b
-        return tf.nn.sigmoid(v) if self.is_output else tf.nn.tanh(v)
+        return tf.nn.sigmoid(v) if self.is_output else tf.nn.relu(v)
 
 
 class Model(tf.Module):
@@ -90,15 +112,16 @@ class Model(tf.Module):
 
 
 def loss(y, y_hat):
-    return tf.reduce_mean(-y * tf.math.log(y_hat) - (1-y) * tf.math.log(1-y_hat))
+    EPS = 1e-15
+    return tf.reduce_mean(-y * tf.math.log(y_hat + EPS) - (1-y) * tf.math.log(1-y_hat + EPS))
 
 
 FLAGS = flags.FLAGS
-flags.DEFINE_integer("num_points", 100, "Number of points in each spiral")
-flags.DEFINE_integer("batch_size", 16, "Number of samples in batch")
+flags.DEFINE_integer("num_points", 2000, "Number of points in each spiral")
+flags.DEFINE_integer("batch_size", 128, "Number of samples in batch")
 flags.DEFINE_integer("random_seed", 31415, "Random seed")
-flags.DEFINE_float("learning_rate", 0.01, "Learning rate")
-flags.DEFINE_integer("num_iters", 10000, "Number of iterations")
+flags.DEFINE_float("learning_rate", 0.001, "Learning rate")
+flags.DEFINE_integer("num_iters", 5000, "Number of iterations")
 
 
 def convert_to_color(val: float):
@@ -111,20 +134,20 @@ def main(_):
     np_rng = np.random.default_rng(np_seed)
     tf_rng = tf.random.Generator.from_seed(tf_seed.entropy)
 
-    d = Data(FLAGS.num_points, np_rng)
+    d = Data(FLAGS.num_points, sig=.02, range=(1,15),rng=np_rng)
 
     model = Model(tf_rng,
                   inputs=2,
                   points=FLAGS.batch_size,
                   nodes=[
-                    Dense(512),
-                    Dense(512),
-                    Dense(512),
+                    Dense(128),
+                    Dense(128),
+                    Dense(128),
                     Dense(1, True)
                   ])
 
-    optimizer = tf.optimizers.SGD(learning_rate=FLAGS.learning_rate)
-    # optimizer = tf.keras.optimizers.Adam(learning_rate=FLAGS.learning_rate)
+    # optimizer = tf.optimizers.SGD(learning_rate=FLAGS.learning_rate)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=FLAGS.learning_rate, beta_1 = .9, beta_2=.999, epsilon=1e-07, name="Adam")
 
     bar = trange(FLAGS.num_iters)
     for i in bar:
