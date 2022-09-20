@@ -2,11 +2,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Dense, Flatten
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Dense, Flatten,Dropout
 
 INPUT_FILE = "./train.csv"
 RNG_SEED = 31415926
 LEARNING_RATE = .001
+BATCH_SIZE = 128
+EPOCHS = 50
 
 
 def load_data(input: str):
@@ -43,9 +45,8 @@ def plotImg(img: np.ndarray, label: str):
 
 def main():
     seed_sequence = np.random.SeedSequence(RNG_SEED)
-    np_seed, _ = seed_sequence.spawn(2)
+    [np_seed] = seed_sequence.spawn(1)
     np_rng = np.random.default_rng(np_seed)
-    # tf_rng = tf.random.Generator.from_seed(tf_seed.entropy)
 
     labels, data = load_data(INPUT_FILE)
     x_train, y_train, x_validate, y_validate, x_test, y_test =  \
@@ -56,21 +57,21 @@ def main():
     model = Sequential([
         Conv2D(32, (3, 3), activation='relu', input_shape=(28, 28, 1)),
         MaxPooling2D((2, 2)),
+        Dropout(.2),
         Conv2D(64, (3, 3),  activation='relu'),
         MaxPooling2D((2, 2)),
         Conv2D(64, (3, 3), activation='relu'),
         Flatten(),
         Dense(64, activation='relu'),
-        Dense(10, activation='softmax')
+        Dense(10, activation='softmax', kernel_regularizer='l2')
     ])
 
     model.summary()
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-    history = model.fit(x_train, y_train, epochs=50, batch_size=128, validation_data=(x_validate, y_validate))
+    history = model.fit(x_train, y_train, epochs=EPOCHS, batch_size=BATCH_SIZE, validation_data=(x_validate, y_validate))
 
-    _,acc = model.evaluate(x_test,y_test)
+    _, acc = model.evaluate(x_test, y_test)
     print("acc: " + str(acc))
-    
 
 
 if __name__ == "__main__":
