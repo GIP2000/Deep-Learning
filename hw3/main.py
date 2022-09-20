@@ -52,8 +52,6 @@ def main():
     x_train, y_train, x_validate, y_validate, x_test, y_test =  \
         split(data, labels, np_rng)
 
-    print(x_train.shape)
-
     model = Sequential([
         Conv2D(32, (3, 3), activation='relu', input_shape=(28, 28, 1)),
         MaxPooling2D((2, 2)),
