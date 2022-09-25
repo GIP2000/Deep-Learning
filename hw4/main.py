@@ -2,7 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Dense, Flatten, Dropout, ReLU, BatchNormalization
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Dense,\
+    Flatten, Dropout, ReLU, BatchNormalization
+import tensorflow_addons as tfa
 
 FOLDER_NAME = "data/"
 FILE_NAME = "data_batch_"
@@ -11,8 +13,8 @@ TEST_FILE = "test_batch"
 META_FILE = "batches.meta"
 RNG_SEED = 31415926
 LEARNING_RATE = .001
-BATCH_SIZE = 128
-EPOCHS = 50
+BATCH_SIZE = 256
+EPOCHS = 40
 
 
 def get_meta(file: str):
@@ -70,8 +72,10 @@ def main():
         Dense(10, activation='softmax', kernel_regularizer='l2')
     ])
 
+    optimizer = tfa.optimizers.AdamW(
+        weight_decay=1e-6, learning_rate=LEARNING_RATE)
     model.summary()
-    model.compile(optimizer='adam',
+    model.compile(optimizer=optimizer,
                   loss='categorical_crossentropy', metrics=['accuracy'])
     history = model.fit(x_train, y_train, epochs=EPOCHS,
                         batch_size=BATCH_SIZE, validation_data=(x_val, y_val))
