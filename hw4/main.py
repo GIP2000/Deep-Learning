@@ -13,8 +13,8 @@ TEST_FILE = "test_batch"
 META_FILE = "batches.meta"
 RNG_SEED = 31415926
 LEARNING_RATE = .001
-BATCH_SIZE = 256
-EPOCHS = 40
+BATCH_SIZE = 128
+EPOCHS = 30
 
 
 def get_meta(file: str):
@@ -61,14 +61,20 @@ def main():
         MaxPooling2D((2, 2)),
         BatchNormalization(),
         ReLU(),
-        Conv2D(256, (3, 3),  activation='relu'),
+        Conv2D(512, (3, 3),  activation='relu'),
+        Conv2D(512, (3, 3),  activation='relu'),
+        Conv2D(512, (3, 3),  activation='relu'),
         MaxPooling2D((2, 2)),
-        Dropout(.2),
-        Conv2D(256, (3, 3), activation='relu'),
+        Conv2D(512, (3, 3), activation='relu'),
+        Conv2D(512, (3, 3), activation='relu'),
+        Conv2D(512, (3, 3), activation='relu'),
         Flatten(),
         Dense(256, activation='relu'),
         Dense(256, activation='relu'),
+        Dropout(.3),
         Dense(256, activation='relu'),
+        Dense(256, activation='relu'),
+        Dropout(.2),
         Dense(10, activation='softmax', kernel_regularizer='l2')
     ])
 
