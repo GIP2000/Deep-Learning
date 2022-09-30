@@ -13,7 +13,7 @@ META_FILE = "batches.meta"
 RNG_SEED = 31415926
 LEARNING_RATE = .001
 BATCH_SIZE = 128
-EPOCHS = 30
+DEFAULT_EPOCHS = 30
 
 
 def get_meta(file: str):
@@ -50,22 +50,19 @@ def plotImg(img: np.ndarray, label: str):
     plt.show()
 
 
-def cifar100():
+def cifar100(EPOCHS: int = DEFAULT_EPOCHS):
     seed_sequence = np.random.SeedSequence(RNG_SEED)
     [np_seed] = seed_sequence.spawn(1)
     np_rng = np.random.default_rng(np_seed)
-    x, y = load_batch("cifar-100-python/test", b'fine_labels')
-    print(x.shape)
-    print(y.shape)
+    x, y = load_batch("cifar-100-python/train", b'fine_labels')
     indexes = np_rng.permutation(len(y))
     x_r = x[indexes]
     y_r = y[indexes]
     split = int(.8*len(y))
-    x_train = x_r[0::split]
-    y_train = y_r[0::split]
+    x_train = x_r[0:split]
+    y_train = y_r[0:split]
     x_val = x_r[split::]
     y_val = y_r[split::]
-
 
     model = Sequential([
         Conv2D(256, (2, 2), activation='relu', input_shape=(32, 32, 3)),
@@ -74,18 +71,23 @@ def cifar100():
         ReLU(),
         Conv2D(256, (2, 2),  activation='relu'),
         Conv2D(256, (2, 2),  activation='relu'),
+        BatchNormalization(),
         Conv2D(256, (2, 2),  activation='relu'),
         MaxPooling2D((2, 2)),
+        BatchNormalization(),
+        ReLU(),
         Conv2D(256, (2, 2), activation='relu'),
         Conv2D(256, (2, 2), activation='relu'),
+        BatchNormalization(),
+        ReLU(),
         Flatten(),
         Dense(256, activation='relu'),
         Dense(256, activation='relu'),
-        Dropout(.6),
+        Dropout(.2),
         Dense(256, activation='relu'),
         Dense(256, activation='relu'),
-        Dropout(.6),
-        Dense(10, activation='softmax', kernel_regularizer='l2')
+        Dropout(.2),
+        Dense(100, activation='softmax', kernel_regularizer='l2')
     ])
 
     optimizer = tfa.optimizers.AdamW(
@@ -101,7 +103,7 @@ def cifar100():
     print("acc: " + str(acc))
 
 
-def cifar10():
+def cifar10(EPOCHS: int = DEFAULT_EPOCHS):
     FOLDER_NAME = "data/"
     # names = get_meta(FOLDER_NAME + META_FILE)
     x_train, y_train, x_val, y_val = load_data(
@@ -142,8 +144,7 @@ def cifar10():
  
 
 def main():
-    # cifar10()
-    cifar100()
+    cifar100(50)
 
 
 if __name__ == "__main__":
