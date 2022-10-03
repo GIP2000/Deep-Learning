@@ -56,9 +56,6 @@ def i_skip(x, filter):
     x = BatchNormalization(axis=3)(x)
     x = ReLU()(x)
     x = Conv2D(filter, (3, 3), padding='same')(x)
-    x = Conv2D(filter, (3, 3), padding='same')(x)
-    x = Dropout(.4)(x)
-    x = Conv2D(filter, (3, 3), padding='same')(x)
     x = BatchNormalization(axis=3)(x)
     x = x + x_skip
     return ReLU()(x)
@@ -140,8 +137,9 @@ def cifar10(EPOCHS: int = DEFAULT_EPOCHS):
         FOLDER_NAME + FILE_NAME, FILE_COUNT)
 
     model = model_builder((32, 32, 3), 10)
-    optimizer = tfa.optimizers.AdamW(
-        weight_decay=1e-6, learning_rate=LEARNING_RATE)
+    # optimizer = tfa.optimizers.AdamW(
+    #     weight_decay=1e-6, learning_rate=LEARNING_RATE)
+    optimizer = tf.keras.optimizers.SGD(learning_rate=.1)
     model.summary()
     model.compile(optimizer=optimizer,
                   loss='categorical_crossentropy', metrics=['accuracy'])
