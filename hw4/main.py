@@ -56,6 +56,9 @@ def i_skip(x, filter):
     x = BatchNormalization(axis=3)(x)
     x = ReLU()(x)
     x = Conv2D(filter, (3, 3), padding='same')(x)
+    x = Conv2D(filter, (3, 3), padding='same')(x)
+    x = Dropout(.4)(x)
+    x = Conv2D(filter, (3, 3), padding='same')(x)
     x = BatchNormalization(axis=3)(x)
     x = x + x_skip
     return ReLU()(x)
@@ -74,15 +77,14 @@ def conv_skip(x, filter):
 
 
 def model_builder(input_shape: tuple, classes: int):
-    filter_size = 256
+    filter_size = 64
     x_input = Input(input_shape)
     x = ZeroPadding2D((3, 3))(x_input)
     x = Conv2D(filter_size, kernel_size=7, strides=2, padding='same')(x)
     x = BatchNormalization()(x)
     x = ReLU()(x)
     x = MaxPooling2D(pool_size=3, strides=2, padding='same')(x)
-    block_layers = [3,4,6,3]
-
+    block_layers = [3, 4, 6, 3]
 
     for i, layer in enumerate(block_layers):
         if i == 0:
@@ -116,7 +118,7 @@ def cifar100(EPOCHS: int = DEFAULT_EPOCHS):
     x_val = x_r[split::]
     y_val = y_r[split::]
 
-    model = model_builder((32, 32, 3), 100)
+    model = model_builder((32, 32, 3), 128)
 
     optimizer = tfa.optimizers.AdamW(
         weight_decay=1e-6, learning_rate=LEARNING_RATE)
@@ -138,27 +140,6 @@ def cifar10(EPOCHS: int = DEFAULT_EPOCHS):
         FOLDER_NAME + FILE_NAME, FILE_COUNT)
 
     model = model_builder((32, 32, 3), 10)
-    # model = Sequential([
-    #     Conv2D(256, (2, 2), activation='relu', input_shape=(32, 32, 3)),
-    #     MaxPooling2D((2, 2)),
-    #     BatchNormalization(),
-    #     ReLU(),
-    #     Conv2D(256, (2, 2),  activation='relu'),
-    #     Conv2D(256, (2, 2),  activation='relu'),
-    #     Conv2D(256, (2, 2),  activation='relu'),
-    #     MaxPooling2D((2, 2)),
-    #     Conv2D(256, (2, 2), activation='relu'),
-    #     Conv2D(256, (2, 2), activation='relu'),
-    #     Flatten(),
-    #     Dense(256, activation='relu'),
-    #     Dense(256, activation='relu'),
-    #     Dropout(.6),
-    #     Dense(256, activation='relu'),
-    #     Dense(256, activation='relu'),
-    #     Dropout(.6),
-    #     Dense(10, activation='softmax', kernel_regularizer='l2')
-    # ])
-
     optimizer = tfa.optimizers.AdamW(
         weight_decay=1e-6, learning_rate=LEARNING_RATE)
     model.summary()
@@ -173,7 +154,7 @@ def cifar10(EPOCHS: int = DEFAULT_EPOCHS):
 
 
 def main():
-    cifar10(50)
+    cifar10(20)
 
 
 if __name__ == "__main__":
