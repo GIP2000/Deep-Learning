@@ -4,7 +4,7 @@ import tensorflow as tf
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from keras.models import Sequential
-from keras.layers import Dense, Dropout, ReLU, Input
+from keras.layers import Dense, Dropout, ReLU, Input, Embedding, Bidirectional, LSTM, GlobalMaxPool1D
 
 MAX_WORDS = 100000
 MAX_SIZE = 1012
@@ -42,26 +42,28 @@ def main():
 
     tokenizer = Tokenizer(oov_token='<OOV>')
     tokenizer.fit_on_texts(x_raw)
-    x = convert_to_sequence(x_raw, tokenizer)
-    y = tf.keras.utils.to_categorical(y)
-    x_train, y_train, x_validate, y_validate = split(x, y, np_rng)
+    x_train = convert_to_sequence(x_raw, tokenizer)
+    y_train = tf.keras.utils.to_categorical(y)
+    x_test_f, y_test_f = build_data(test)
+    x_test_ft = convert_to_sequence(x_test_f, tokenizer)
+    y_test_ft = tf.keras.utils.to_categorical(y)
+    x_test, y_test, x_validate, y_validate = split(x_test_ft, y_test_ft, np_rng)
+
     model = Sequential([
-        Input((MAX_SIZE,)),
-        Dense(512, activation="relu"),
-        Dense(512, activation="relu"),
-        Dense(512, activation="relu"),
-        Dense(512, activation="relu"),
+        Embedding(input_dim=MAX_SIZE, output_dim=2048),
+        Bidirectional(LSTM(128, return_sequences=True)),
+        Bidirectional(LSTM(128, return_sequences=True)),
+        Bidirectional(LSTM(128, return_sequences=True)),
+        GlobalMaxPool1D(),
+        Dense(512, activation='relu'),
+        Dense(512, activation='relu'),
+        Dropout(.5),
         Dense(num_classes, activation="softmax")
     ])
-    print(x_train.shape)
-    print(x_validate.shape)
     model.summary()
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     _ = model.fit(x_train, y_train, epochs=10, batch_size=BATCH_SIZE, validation_data=(x_validate, y_validate))
 
-    x_test_raw, y_test_raw = build_data(test)
-    x_test = convert_to_sequence(x_test_raw, tokenizer)
-    y_test = tf.keras.utils.to_categorical(y_test_raw)
 
     _, acc = model.evaluate(x_test, y_test)
     print("acc: " + str(acc))

@@ -50,55 +50,107 @@ def plotImg(img: np.ndarray, label: str):
     plt.show()
 
 
-def i_skip(x, filter):
-    x_skip = x
-    x = Conv2D(filter, (3, 3), padding='same')(x)
-    x = BatchNormalization(axis=3)(x)
-    x = ReLU()(x)
-    x = Conv2D(filter, (3, 3), padding='same')(x)
-    x = BatchNormalization(axis=3)(x)
-    x = x + x_skip
-    return ReLU()(x)
-
-
-def conv_skip(x, filter):
-    x_skip = x
-    x = Conv2D(filter, (3, 3), padding='same', strides=(2, 2))(x)
-    x = BatchNormalization(axis=3)(x)
-    x = ReLU()(x)
-    x = Conv2D(filter, (3, 3), padding='same')(x)
-    x = BatchNormalization(axis=3)(x)
-    x_skip = Conv2D(filter, (1, 1), strides=(2, 2))(x_skip)
-    x = x + x_skip
-    return ReLU()(x)
-
-
-def model_builder(input_shape: tuple, classes: int):
-    filter_size = 64
-    x_input = Input(input_shape)
-    x = ZeroPadding2D((3, 3))(x_input)
-    x = Conv2D(filter_size, kernel_size=7, strides=2, padding='same')(x)
+def res50():
+    input = Input(shape=(32, 32, 3))
+    x = ZeroPadding2D(padding=(3, 3))(input)
+    x = Conv2D(64, kernel_size=(7, 7), strides=(2, 2))(x)
     x = BatchNormalization()(x)
     x = ReLU()(x)
-    x = MaxPooling2D(pool_size=3, strides=2, padding='same')(x)
-    block_layers = [3, 4, 6, 3]
+    x = MaxPooling2D((3, 3), strides=(2, 2))(x)
+    #2nd stage 
+    # frm here on only conv block and identity block, no pooling
 
-    for i, layer in enumerate(block_layers):
-        if i == 0:
-            # skip layer
-            for _ in range(layer):
-                x = i_skip(x, filter_size)
-        else:
-            filter_size = filter_size * 2
-            x = conv_skip(x, filter_size)
-            for _ in range(layer - 1):
-                x = i_skip(x, filter_size)
+    x = skip_conv(x, s=1, filters=(64, 256))
+    x = skip_identity(x, filters=(64, 256))
+    x = skip_identity(x, filters=(64, 256))
+
+    # 3rd stage
+
+    x = skip_conv(x, s=2, filters=(128, 512))
+    x = skip_identity(x, filters=(128, 512))
+    x = skip_identity(x, filters=(128, 512))
+    x = skip_identity(x, filters=(128, 512))
+
+    # 4th stage
+
+    x = skip_conv(x, s=2, filters=(256, 1024))
+    x = skip_identity(x, filters=(256, 1024))
+    x = skip_identity(x, filters=(256, 1024))
+    x = skip_identity(x, filters=(256, 1024))
+    x = skip_identity(x, filters=(256, 1024))
+    x = skip_identity(x, filters=(256, 1024))
+
+    # 5th stage
+
+    x = skip_conv(x, s=2, filters=(512, 2048))
+    x = skip_identity(x, filters=(512, 2048))
+    x = skip_identity(x, filters=(512, 2048))
+
+    # ends with average pooling and dense connection
 
     x = AveragePooling2D((2, 2), padding='same')(x)
+
     x = Flatten()(x)
-    x = Dense(512, activation='relu')(x)
-    x = Dense(classes, activation='softmax')(x)
-    return tf.keras.models.Model(inputs=x_input, outputs=x)
+    x = Dense(100, activation='softmax', kernel_initializer='he_normal')(x)
+
+    return tf.keras.models.Model(inputs = input, outputs=x)
+
+
+
+def skip_conv(x, s, filters):
+    x_skip = x
+    f1, f2 = filters
+    l2 = tf.keras.regularizers.L2
+
+    # first block
+    x = Conv2D(f1, kernel_size=(1, 1), strides=(s, s), padding='valid', kernel_regularizer=l2(0.001))(x)
+    # when s = 2 then it is like downsizing the feature map
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+
+    # second block
+    x = Conv2D(f1, kernel_size=(3, 3), strides=(1, 1), padding='same', kernel_regularizer=l2(0.001))(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+
+    # third block
+    x = Conv2D(f2, kernel_size=(1, 1), strides=(1, 1), padding='valid', kernel_regularizer=l2(0.001))(x)
+    x = BatchNormalization()(x)
+
+    # shortcut
+    x_skip = Conv2D(f2, kernel_size=(1, 1), strides=(s, s), padding='valid', kernel_regularizer=l2(0.001))(x_skip)
+    x_skip = BatchNormalization()(x_skip)
+
+    # add
+    x = x + x_skip
+    x = ReLU()(x)
+
+    return x
+
+def skip_identity(x, filters):
+    x_skip = x
+    f1, f2 = filters
+    l2 = tf.keras.regularizers.L2
+
+    # First Block
+    x = Conv2D(f1, kernel_size=(1, 1), strides=(1, 1), padding='valid', kernel_regularizer=l2(0.001))(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+
+    # Second Block
+    x = Conv2D(f1, kernel_size=(3, 3), strides=(1, 1), padding='same', kernel_regularizer=l2(0.001))(x)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+
+    # third block activation used after adding the input
+    x = Conv2D(f2, kernel_size=(1, 1), strides=(1, 1), padding='valid', kernel_regularizer=l2(0.001))(x)
+    x = BatchNormalization()(x)
+
+    # add the input
+    x = x + x_skip
+    x = ReLU()(x)
+
+    return x
 
 
 def cifar100(EPOCHS: int = DEFAULT_EPOCHS):
@@ -115,19 +167,40 @@ def cifar100(EPOCHS: int = DEFAULT_EPOCHS):
     x_val = x_r[split::]
     y_val = y_r[split::]
 
-    model = model_builder((32, 32, 3), 128)
+    model = Sequential([
+        Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same', input_shape=(32, 32, 3)),
+        BatchNormalization(),
+        Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same'),
+        BatchNormalization(),
+        MaxPooling2D((2, 2)),
+        Dropout(.2),
+        Conv2D(64, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same'),
+        BatchNormalization(),
+        Conv2D(64, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same'),
+        BatchNormalization(),
+        MaxPooling2D((2, 2)),
+        Dropout(.3),
+        Conv2D(128, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same'),
+        BatchNormalization(),
+        Conv2D(128, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same'),
+        BatchNormalization(),
+        MaxPooling2D((2, 2)),
+        Dropout(.4),
+        Flatten(),
+        Dense(100, activation="softmax")
+    ])
 
-    optimizer = tfa.optimizers.AdamW(
-        weight_decay=1e-6, learning_rate=LEARNING_RATE)
     model.summary()
-    model.compile(optimizer=optimizer,
-                  loss='categorical_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer='adam',
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy', tf.metrics.TopKCategoricalAccuracy(5)])
     _ = model.fit(x_train, y_train, epochs=EPOCHS,
                   batch_size=BATCH_SIZE, validation_data=(x_val, y_val))
 
     x_test, y_test = load_batch("cifar-100-python/test", b'fine_labels')
-    _, acc = model.evaluate(x_test, y_test)
+    _, acc, top5 = model.evaluate(x_test, y_test)
     print("acc: " + str(acc))
+    print("top5: " + str(top5))
 
 
 def cifar10(EPOCHS: int = DEFAULT_EPOCHS):
@@ -136,12 +209,34 @@ def cifar10(EPOCHS: int = DEFAULT_EPOCHS):
     x_train, y_train, x_val, y_val = load_data(
         FOLDER_NAME + FILE_NAME, FILE_COUNT)
 
-    model = model_builder((32, 32, 3), 10)
+    # model = model_builder((32, 32, 3), 10)
+    model = Sequential([
+        Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same', input_shape=(32, 32, 3)),
+        BatchNormalization(),
+        Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same'),
+        BatchNormalization(),
+        MaxPooling2D((2, 2)),
+        Dropout(.2),
+        Conv2D(64, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same'),
+        BatchNormalization(),
+        Conv2D(64, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same'),
+        BatchNormalization(),
+        MaxPooling2D((2, 2)),
+        Dropout(.3),
+        Conv2D(128, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same'),
+        BatchNormalization(),
+        Conv2D(128, (3, 3), activation='relu', kernel_initializer='he_uniform', padding='same'),
+        BatchNormalization(),
+        MaxPooling2D((2, 2)),
+        Dropout(.4),
+        Flatten(),
+        Dense(10, activation="softmax")
+        ])
     # optimizer = tfa.optimizers.AdamW(
     #     weight_decay=1e-6, learning_rate=LEARNING_RATE)
-    optimizer = tf.keras.optimizers.SGD(learning_rate=.1)
+    # optimizer = tf.keras.optimizers.SGD(learning_rate=.1)
     model.summary()
-    model.compile(optimizer=optimizer,
+    model.compile(optimizer='adam',
                   loss='categorical_crossentropy', metrics=['accuracy'])
     history = model.fit(x_train, y_train, epochs=EPOCHS,
                         batch_size=BATCH_SIZE, validation_data=(x_val, y_val))
@@ -152,7 +247,7 @@ def cifar10(EPOCHS: int = DEFAULT_EPOCHS):
 
 
 def main():
-    cifar10(20)
+    cifar100(50)
 
 
 if __name__ == "__main__":
