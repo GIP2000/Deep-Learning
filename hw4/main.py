@@ -252,3 +252,10 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+"""
+For Cifar10 I end up getting an accuracy of ~84% with this model which is near the state of the art in the 90% range, 
+For Cifar100 I could not get the model to do any better than than a top 5 accuracy in the 80% Range I tried the ResNet model (in an unused function above),
+but it did not yield better results than a standard conv model. Likely Data Augmentation would be helpful 
+"""

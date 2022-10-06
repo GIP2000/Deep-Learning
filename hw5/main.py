@@ -71,3 +71,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+"""
+I had a lot of issues with this model, This model gets an accuracy of 25% due to overfitting. I tried 
+using Bert as an embedding layer, but I had issues getting it working and ran out of time. 
+"""
