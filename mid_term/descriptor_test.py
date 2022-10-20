@@ -1,7 +1,8 @@
 import openai
 import json
+import os
 
-openai.api_key = "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"
+openai.api_key = os.getenv("OPEN_AI_API_KEY")
 
 class LabelsWithDescriptors:
 
@@ -11,8 +12,7 @@ class LabelsWithDescriptors:
         if descriptors is not None:
             self.descriptors = descriptors
         else:
-            print(self.labels[0])
-            print(self.get_parsed_response(self.labels[0]))
+            self.descriptors = self.get_parsed_response(self.labels[0])
 
     @staticmethod
     def build_input(category_name: str) -> str:
@@ -47,16 +47,20 @@ A: There are several useful visual features to tell there is a {category_name} i
     @staticmethod
     def get_parsed_response(input:str):
         raw = LabelsWithDescriptors.get_response(input).get("choices")[0]["text"]
-        raw.split("\n")
+        return [x[1:].strip() for x in raw.split("\n")]
 
 
 def main(f):
     cats = json.load(f)['cats']
-
+    newCats = []
     for (i, labels) in enumerate(cats):
-        if i >= 1:
+        if i >= 10:
             break
-        l = LabelsWithDescriptors(i,labels)
+        print(f"#{i}: {labels[0]}")
+        newCats.append(LabelsWithDescriptors(i,labels))
+    # print(json.dumps([x.__dict__ for x in newCats]))
+    with open("new_cats.json", "w") as outfile:
+        json.dump([x.__dict__ for x in newCats], outfile)
 
 
 
