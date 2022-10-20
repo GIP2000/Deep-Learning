@@ -29,7 +29,7 @@ A: There are several useful visual features to tell there is a lemur in a
 
 Q: What are useful visual features for distinguishing a {category_name} in a photo?
 A: There are several useful visual features to tell there is a {category_name} in a
-     photo
+     photo:
 -"""
 
     @staticmethod
