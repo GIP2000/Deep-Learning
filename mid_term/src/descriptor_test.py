@@ -85,7 +85,6 @@ if __name__ == "__main__":
         exit(2)
 
     [_, flag, path] = argv
-
     if flag == "-g":
         with open(path) as f:
             create_descriptors_from_file(f)
